@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
+import duckdb
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / 'data'
@@ -52,4 +53,4 @@ if missing_tickers:
 
 #Export Market Data
 
-df_long.to_csv(DATA_DIR / 'ETFs_Stack.csv', index=False)
+#df_long.to_csv(DATA_DIR / 'ETFs_Stack.csv', index=False)
