@@ -17,7 +17,7 @@ etfs = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'BND']
 
 #Extract - Download market data from Yahoo Finance
 
-data = yf.download(etfs, start='2020-01-01', end='2026-01-01')
+data = yf.download(etfs, start='2020-01-01', end='2026-01-01', auto_adjust=False)
 
 #Transform - Normalize and standardize market data
 
@@ -38,7 +38,7 @@ df_long['ticker'] = df_long['ticker'].astype('string')
 
 price_cols = ['open', 'high', 'low', 'close']
 
-df_long[price_cols] = df_long[price_cols].astype('float64')
+df_long[price_cols] = df_long[price_cols].astype('float64').round(6)
 df_long['volume'] = df_long['volume'].astype('Int64')
 
 #Data Quality Checks
