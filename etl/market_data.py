@@ -58,7 +58,7 @@ assert (df_long['high'] >= df_long['close']).all()
 assert (df_long['low'] <= df_long['open']).all()
 assert (df_long['low'] <= df_long['close']).all()
 
-expected_tickers = {'BND', 'IWM', 'QQQ', 'SPY', 'VTI', 'VXUS'}
+expected_tickers = {'BND', 'IWM', 'QQQ', 'SPY', 'VTI', 'VXUS', 'VT'}
 
 actual_tickers = set(df_long['ticker'].unique())
 missing_tickers = expected_tickers - actual_tickers
