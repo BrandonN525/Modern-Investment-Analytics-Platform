@@ -27,6 +27,7 @@ df_long = df_long.rename(columns={
     'Date': 'date',
     'Ticker': 'ticker',
     'Close': 'close',
+    'Adj Close': 'adj_close',
     'High': 'high',
     'Low': 'low',
     'Open': 'open',
@@ -36,7 +37,7 @@ df_long = df_long.rename(columns={
 df_long['date'] = pd.to_datetime(df_long['date'])
 df_long['ticker'] = df_long['ticker'].astype('string')
 
-price_cols = ['open', 'high', 'low', 'close']
+price_cols = ['open', 'high', 'low', 'close', 'adj_close']
 
 df_long[price_cols] = df_long[price_cols].astype('float64').round(6)
 df_long['volume'] = df_long['volume'].astype('Int64')
