@@ -13,7 +13,7 @@ DATABASE_PATH = DATABASE_DIR / "investment_analytics.duckdb"
 
 #Configuration
 
-etfs = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'BND']
+etfs = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'VT', 'BND']
 
 #Extract - Download market data from Yahoo Finance
 
