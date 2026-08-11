@@ -51,3 +51,13 @@ def test_null_volume_raises_error():
 
     with pytest.raises(ValueError, match='null volume'):
         validate_market_data(df, {'SPY', 'QQQ'})
+
+def test_duplicate_date_ticker_raises_error():
+    df = create_valid_market_data()
+    df.loc[0, 'ticker'] = 'SPY'
+    df.loc[1, 'ticker'] = 'SPY'
+    df.loc[0, 'date'] = pd.to_datetime('2020-01-01')
+    df.loc[1, 'date'] = pd.to_datetime('2020-01-01')
+
+    with pytest.raises(ValueError, match='date/ticker combinations'):
+        validate_market_data(df, {'SPY'})
