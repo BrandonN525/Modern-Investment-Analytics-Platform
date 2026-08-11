@@ -42,35 +42,13 @@ price_cols = ['open', 'high', 'low', 'close', 'adj_close']
 df_long[price_cols] = df_long[price_cols].astype('float64').round(6)
 df_long['volume'] = df_long['volume'].astype('Int64')
 
-#Data Quality Checks
-
-assert df_long['ticker'].notna().all()
-assert df_long['date'].notna().all()
-assert df_long['close'].notna().all()
-
-assert df_long.duplicated(['date', 'ticker']).sum() == 0
-
-assert (df_long["volume"] >= 0).all()
-
-assert (df_long['high'] >= df_long['low']).all()
-assert (df_long['high'] >= df_long['open']).all()
-assert (df_long['high'] >= df_long['close']).all()
-assert (df_long['low'] <= df_long['open']).all()
-assert (df_long['low'] <= df_long['close']).all()
-
 expected_tickers = {'BND', 'IWM', 'QQQ', 'SPY', 'VTI', 'VXUS', 'VT'}
 
-actual_tickers = set(df_long['ticker'].unique())
-missing_tickers = expected_tickers - actual_tickers
+#Data Quality Checks
 
-if missing_tickers:
-    raise ValueError(f'Missing tickers: {missing_tickers}')
+from validation import validate_market_data
 
-assert (df_long['volume'] >= 0).all()
-assert (df_long['open'] > 0).all()
-assert (df_long['high'] > 0).all()
-assert (df_long['low'] > 0).all()
-assert (df_long['close'] > 0).all()
+validate_market_data(df_long, expected_tickers)
 
 #Load - Write validated data to DuckDB
 
