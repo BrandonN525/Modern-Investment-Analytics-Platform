@@ -24,6 +24,7 @@ def validate_market_data(df, expected_tickers):
     if (df['close'] < df['low']).any():
         raise ValueError("Market data contains close/low price violations.")
 
+    expected_tickers = set(expected_tickers)
     actual_tickers = set(df['ticker'].unique())
     missing_tickers = expected_tickers - actual_tickers
 
