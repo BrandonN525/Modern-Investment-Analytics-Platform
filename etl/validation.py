@@ -35,11 +35,7 @@ def validate_market_data(df, expected_tickers):
         raise ValueError("Market data contains negative volume.")
     if (df['open'] <= 0).any():
         raise ValueError("Market data contains invalid open prices.")
-    if (df['high'] <= 0).any():
-        raise ValueError("Market data contains invalid high prices.")
     if (df['low'] <= 0).any():
         raise ValueError("Market data contains invalid low prices.")
-    if (df['close'] <= 0).any():
-        raise ValueError("Market data contains invalid closing prices.")
     if (df['adj_close'] <= 0).any():
         raise ValueError("Market data contains invalid adjusted closing prices.")
