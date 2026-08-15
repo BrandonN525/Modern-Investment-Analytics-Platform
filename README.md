@@ -13,7 +13,7 @@ The initial pipeline uses Python and `yfinance` to extract historical market dat
 * [x] Explicit data type standardization
 * [x] Data quality validation
 * [x] DuckDB database creation and loading
-* [ ] Automated Python tests
+* [x] Automated Python tests
 * [ ] FRED economic data ingestion
 * [ ] Company fundamentals ingestion
 * [ ] dbt transformation layer
@@ -313,8 +313,8 @@ The platform will be developed incrementally across several stages:
 
 ### Phase 2 — Data Quality & Testing
 
-* [ ] Automated Python tests
-* [ ] Expanded data-quality framework
+* [x] Automated Python tests
+* [x] Expanded data-quality framework
 * [ ] Pipeline error handling and logging
 
 ### Phase 3 — Additional Data Sources
