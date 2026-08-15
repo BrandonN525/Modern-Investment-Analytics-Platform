@@ -315,7 +315,7 @@ The platform will be developed incrementally across several stages:
 
 * [x] Automated Python tests
 * [x] Expanded data-quality framework
-* [ ] Pipeline error handling and logging
+* [x] Pipeline error handling and logging
 
 ### Phase 3 — Additional Data Sources
 
