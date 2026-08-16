@@ -25,6 +25,25 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+#Metadata Check
+
+def get_market_data_start_date() -> date:
+    try:
+        with duckdb.connect(DATABASE_PATH) as con:
+            table_exists = con.sql("""SELECT 1 FROM information_schema.tables WHERE table_name = 'raw_market_prices'""").fetchone()[0]
+            if table_exists == 1:
+                max_date = con.sql("""SELECT MAX(date) FROM raw_market_prices""").fetchone()[0]
+                if max_date is None:
+                    start_date = date(2020, 1, 1)
+                else:
+                    start_date = max_date.date()
+            else:
+                start_date = date(2020, 1, 1)
+            return start_date
+    except Exception:
+        logger.exception("Metadata check failed")
+        raise
+
 #Extract - Download market data from Yahoo Finance
 
 def extract_market_data(start_date: date, end_date: date) -> pd.DataFrame:
@@ -82,14 +101,43 @@ def load_market_data(df: pd.DataFrame) -> None:
 
     try:
         with duckdb.connect(DATABASE_PATH) as con:
-            con.execute("""
-                CREATE OR REPLACE TABLE raw_market_prices AS
-                SELECT *
-                FROM df
-            """)
-
-            row_count = con.sql("""SELECT COUNT(*) FROM raw_market_prices""").fetchone()[0]
-            logger.info("Successfully loaded %d rows", row_count)
+            table_exists = con.sql("""SELECT 1 FROM information_schema.tables WHERE table_name = 'raw_market_prices'""").fetchone()[0]
+            if table_exists != 1:
+                con.execute("""
+                                CREATE TABLE raw_market_prices AS
+                                SELECT *
+                                FROM df
+                            """)
+                row_count = con.sql("""SELECT COUNT(*) FROM raw_market_prices""").fetchone()[0]
+                logger.info("Created raw_market_prices with %d rows", row_count)
+            else:
+                logger.info("Existing table detected")
+                row_count = con.sql("""SELECT COUNT(*) FROM df""").fetchone()[0]
+                logger.info("Extracted %d rows", row_count)
+                new_row_count = con.sql("""
+                                        SELECT COUNT(*)
+                                        FROM df
+                                        WHERE NOT EXISTS(
+                                            SELECT 1
+                                            FROM raw_market_prices existing
+                                            WHERE existing.date = df.date
+                                            AND existing.ticker = df.ticker
+                                        )
+                                        """).fetchone()[0]
+                logger.info("%d new rows identified for insertion", new_row_count)
+                con.execute("""
+                    INSERT INTO raw_market_prices
+                    SELECT *
+                    FROM df
+                    WHERE NOT EXISTS(
+                        SELECT 1
+                        FROM raw_market_prices existing
+                        WHERE existing.date = df.date
+                        AND existing.ticker = df.ticker
+                    )
+                """)
+            logger.info("Inserted %d new rows", new_row_count)
+            logger.info("Market data load complete")
     except Exception:
         logger.exception("Market data loading failed")
         raise
@@ -99,8 +147,10 @@ def load_market_data(df: pd.DataFrame) -> None:
 def main():
     logger.info("Starting market data pipeline")
 
-    start_date = date(2020, 1, 1)
+    start_date = get_market_data_start_date()
     end_date = date.today()
+
+    logger.info("Extraction window: %s to %s", start_date, end_date)
 
     try:
         data = extract_market_data(start_date, end_date)
