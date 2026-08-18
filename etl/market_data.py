@@ -27,11 +27,16 @@ logger = logging.getLogger(__name__)
 
 #Metadata Check
 
-def get_market_data_start_date() -> date:
+def get_market_data_start_date(database_path=DATABASE_PATH) -> date:
     try:
-        with duckdb.connect(DATABASE_PATH) as con:
-            table_exists = con.sql("""SELECT 1 FROM information_schema.tables WHERE table_name = 'raw_market_prices'""").fetchone()[0]
-            if table_exists == 1:
+        with duckdb.connect(database_path) as con:
+            table_exists = con.sql("""
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'main'
+                AND table_name = 'raw_market_prices'
+            """).fetchone()
+            if table_exists is not None:
                 max_date = con.sql("""SELECT MAX(date) FROM raw_market_prices""").fetchone()[0]
                 if max_date is None:
                     start_date = date(2020, 1, 1)
@@ -101,30 +106,49 @@ def load_market_data(df: pd.DataFrame) -> None:
 
     try:
         with duckdb.connect(DATABASE_PATH) as con:
-            table_exists = con.sql("""SELECT 1 FROM information_schema.tables WHERE table_name = 'raw_market_prices'""").fetchone()[0]
-            if table_exists != 1:
+            table_exists = con.sql("""
+                           SELECT 1
+                           FROM information_schema.tables
+                           WHERE table_schema = 'main'
+                           AND table_name = 'raw_market_prices'""").fetchone()
+            
+            if table_exists is None:
                 con.execute("""
-                                CREATE TABLE raw_market_prices AS
-                                SELECT *
-                                FROM df
-                            """)
-                row_count = con.sql("""SELECT COUNT(*) FROM raw_market_prices""").fetchone()[0]
+                    CREATE TABLE raw_market_prices AS
+                    SELECT *
+                    FROM df
+                """)
+                
+                row_count = con.sql("""
+                    SELECT COUNT(*)
+                    FROM raw_market_prices
+                """).fetchone()[0]
+
                 logger.info("Created raw_market_prices with %d rows", row_count)
+
             else:
                 logger.info("Existing table detected")
-                row_count = con.sql("""SELECT COUNT(*) FROM df""").fetchone()[0]
+
+                row_count = con.sql("""
+                    SELECT COUNT(*)
+                    FROM df
+                """).fetchone()[0]
+
                 logger.info("Extracted %d rows", row_count)
+
                 new_row_count = con.sql("""
-                                        SELECT COUNT(*)
-                                        FROM df
-                                        WHERE NOT EXISTS(
-                                            SELECT 1
-                                            FROM raw_market_prices existing
-                                            WHERE existing.date = df.date
-                                            AND existing.ticker = df.ticker
-                                        )
-                                        """).fetchone()[0]
+                    SELECT COUNT(*)
+                    FROM df
+                    WHERE NOT EXISTS(
+                        SELECT 1
+                        FROM raw_market_prices existing
+                        WHERE existing.date = df.date
+                        AND existing.ticker = df.ticker
+                    )
+                """).fetchone()[0]
+                
                 logger.info("%d new rows identified for insertion", new_row_count)
+
                 con.execute("""
                     INSERT INTO raw_market_prices
                     SELECT *
@@ -136,8 +160,11 @@ def load_market_data(df: pd.DataFrame) -> None:
                         AND existing.ticker = df.ticker
                     )
                 """)
-            logger.info("Inserted %d new rows", new_row_count)
+
+                logger.info("Inserted %d new rows", new_row_count)
+
             logger.info("Market data load complete")
+
     except Exception:
         logger.exception("Market data loading failed")
         raise
