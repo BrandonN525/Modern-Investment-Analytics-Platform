@@ -1,13 +1,15 @@
 import pandas as pd
 from datetime import date
 import duckdb
-from etl.market_data import get_market_data_start_date
+from etl.market_data import get_market_data_start_dates
 from etl.market_data import extract_market_data
 from unittest.mock import patch
 import pytest
 
 def test_get_market_data_start_date_with_existing_data(tmp_path):
     db_path = tmp_path / "test.duckdb"
+
+    etfs = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'VT', 'BND', 'FZROX', 'FZILX', 'FXNAX', 'FBIIX']
     
     df = pd.DataFrame({'date': ['2026-08-14', '2026-08-14', '2026-08-15', '2026-08-15'], 'ticker': ['SPY', 'QQQ', 'SPY', 'QQQ']})
 
@@ -19,9 +21,9 @@ def test_get_market_data_start_date_with_existing_data(tmp_path):
             SELECT * FROM df
         """)
 
-    start_date = get_market_data_start_date(db_path)
+    start_dates = get_market_data_start_dates(etfs, db_path, date(2020,1,1))
 
-    assert start_date == date(2026, 8, 15)
+    assert start_dates['SPY'] == date(2026, 8, 14)
 
 def test_get_market_data_start_date_without_table(tmp_path):
     db_path = tmp_path / "test.duckdb"
@@ -29,7 +31,7 @@ def test_get_market_data_start_date_without_table(tmp_path):
     with duckdb.connect(db_path) as con:
         pass
 
-    start_date = get_market_data_start_date(db_path)
+    start_date = get_market_data_start_dates(db_path)
 
     assert start_date == date(2020, 1, 1)
 
@@ -44,7 +46,7 @@ def test_get_market_data_start_date_with_empty_table(tmp_path):
             )
         """)
 
-    start_date = get_market_data_start_date(db_path)
+    start_date = get_market_data_start_dates(db_path)
 
     assert start_date == date(2020, 1, 1)
 

@@ -15,8 +15,7 @@ DATABASE_PATH = DATABASE_DIR / "investment_analytics.duckdb"
 
 #Configuration
 
-etfs = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'VT', 'BND']
-expected_tickers = {'BND', 'IWM', 'QQQ', 'SPY', 'VTI', 'VXUS', 'VT'}
+etfs = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'VT', 'BND', 'FZROX', 'FZILX', 'FXNAX', 'FBIIX']
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,10 +24,40 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+HISTORICAL_START_DATE = date(2020, 1, 1)
+
+#Source Start Dates
+
+def get_source_start_dates(tickers, historical_start_date=HISTORICAL_START_DATE):
+    source_start_dates = {}
+
+    for ticker in tickers:
+        try:
+            data = yf.download(ticker, start=historical_start_date, end=date.today(), auto_adjust=False)
+
+            if data.empty:
+                source_start_dates[ticker] = None
+                continue
+
+            data = data.stack(level='Ticker', future_stack=True).reset_index()
+            
+            data = data.dropna(subset=['Date', 'Ticker', 'Close', 'Adj Close', 'High', 'Low', 'Open', 'Volume'])
+
+            source_start_dates[ticker] = data['Date'].min()
+
+        except Exception:
+            logger.exception("Failed to determine source start date for %s", ticker)
+            raise
+
+    return source_start_dates
+
 #Metadata Check
 
-def get_market_data_start_date(database_path=DATABASE_PATH) -> date:
+def get_market_data_start_dates(tickers, database_path=DATABASE_PATH, historical_start_date = HISTORICAL_START_DATE) -> dict:
     try:
+
+        source_start_dates = get_source_start_dates(tickers, historical_start_date)
+
         with duckdb.connect(database_path) as con:
             table_exists = con.sql("""
                 SELECT 1
@@ -36,26 +65,52 @@ def get_market_data_start_date(database_path=DATABASE_PATH) -> date:
                 WHERE table_schema = 'main'
                 AND table_name = 'raw_market_prices'
             """).fetchone()
-            if table_exists is not None:
-                max_date = con.sql("""SELECT MAX(date) FROM raw_market_prices""").fetchone()[0]
-                if max_date is None:
-                    start_date = date(2020, 1, 1)
+
+            if table_exists is None:
+                return {ticker: historical_start_date for ticker in tickers}
+
+            metadata = con.sql("""
+                SELECT ticker, MIN(date) as min_date, MAX(date) as max_date
+                FROM raw_market_prices
+                GROUP BY ticker""").fetchall()
+
+            ticker_metadata = {ticker: {'min_date': min_date, 'max_date': max_date} for ticker, min_date, max_date in metadata}
+
+            start_dates = {}
+
+            for ticker in tickers:
+                if ticker not in ticker_metadata:
+                    start_dates[ticker] = historical_start_date
+                    continue
+
+                db_min_date = ticker_metadata[ticker]['min_date']
+                db_max_date = ticker_metadata[ticker]['max_date']
+
+                source_min_date = source_start_dates[ticker]
+
+                if source_min_date is None:
+                    start_dates[ticker] = db_max_date.date()
+                    continue
+
+                if db_min_date.date() > source_min_date.date():
+                    start_dates[ticker] = historical_start_date
+
                 else:
-                    start_date = max_date.date()
-            else:
-                start_date = date(2020, 1, 1)
-            return start_date
+                    start_dates[ticker] = db_max_date.date()
+
+        return start_dates
+    
     except Exception:
         logger.exception("Metadata check failed")
         raise
 
 #Extract - Download market data from Yahoo Finance
 
-def extract_market_data(start_date: date, end_date: date) -> pd.DataFrame:
-    logger.info("Extracting market data for %d ETFs from %s to %s", len(etfs), start_date, end_date)
+def extract_market_data(tickers, start_date: date, end_date: date) -> pd.DataFrame:
+    logger.info("Extracting market data for %d ETFs from %s to %s", len(tickers), start_date, end_date)
 
     try:
-        data = yf.download(etfs, start=start_date, end=end_date, auto_adjust=False)
+        data = yf.download(tickers, start=start_date, end=end_date, auto_adjust=False)
     except Exception:
         logger.exception("Market data extraction failed")
         raise
@@ -83,6 +138,13 @@ def transform_market_data(data: pd.DataFrame) -> pd.DataFrame:
             'Volume': 'volume'
         })
 
+        null_count = df_long[['date', 'ticker', 'close', 'adj_close', 'high', 'low', 'open', 'volume']].isnull().any(axis=1).sum()
+
+        if null_count > 0:
+            logger.info("%d rows with missing values detected", null_count)
+            df_long = df_long.dropna(subset=['date', 'ticker', 'close', 'adj_close', 'high', 'low', 'open', 'volume'])
+            logger.info("%d rows with missing values removed", null_count)
+
         df_long['date'] = pd.to_datetime(df_long['date'])
         df_long['ticker'] = df_long['ticker'].astype('string')
 
@@ -100,12 +162,12 @@ def transform_market_data(data: pd.DataFrame) -> pd.DataFrame:
 
 #Load - Write validated data to DuckDB
 
-def load_market_data(df: pd.DataFrame) -> None:
+def load_market_data(df: pd.DataFrame, database_path=DATABASE_PATH) -> None:
     logger.info("Loading market data into DuckDB")
     DATABASE_DIR.mkdir(exist_ok=True)
 
     try:
-        with duckdb.connect(DATABASE_PATH) as con:
+        with duckdb.connect(database_path) as con:
             table_exists = con.sql("""
                            SELECT 1
                            FROM information_schema.tables
@@ -174,20 +236,38 @@ def load_market_data(df: pd.DataFrame) -> None:
 def main():
     logger.info("Starting market data pipeline")
 
-    start_date = get_market_data_start_date()
+    start_dates = get_market_data_start_dates(etfs)
     end_date = date.today()
 
-    logger.info("Extraction window: %s to %s", start_date, end_date)
+    extraction_groups = {}
+
+    for ticker, start_date in start_dates.items():
+        extraction_groups.setdefault(start_date, [])
+        extraction_groups[start_date].append(ticker)
+
+    logger.info("Utilizing the following tickers grouped by start date: %s", extraction_groups)
 
     try:
-        data = extract_market_data(start_date, end_date)
-        df = transform_market_data(data)
+        for start_date, tickers in extraction_groups.items():
+            logger.info("Processing %d tickers from %s to %s: %s", len(tickers), start_date, end_date, tickers)
 
-        logger.info("Validating market data")
-        validate_market_data(df, expected_tickers)
-        logger.info("Market data validation passed")
+            #To do: extract data for this group
 
-        load_market_data(df)
+            data = extract_market_data(tickers, start_date, end_date)
+
+            #To do: Transform extracted data
+
+            df = transform_market_data(data)
+
+            #To do: Validate against the tickers in this group
+            
+            logger.info("Validating market data")
+            validate_market_data(df, set(tickers))
+            logger.info("Market data validation passed")
+
+            #To do: Load the transformed data 
+
+            load_market_data(df)
 
     except Exception:
         logger.exception("Market data pipeline failed")
