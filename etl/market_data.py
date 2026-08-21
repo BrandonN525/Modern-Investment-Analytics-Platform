@@ -15,7 +15,7 @@ DATABASE_PATH = DATABASE_DIR / "investment_analytics.duckdb"
 
 #Configuration
 
-etfs = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'VT', 'BND', 'FZROX', 'FZILX', 'FXNAX', 'FBIIX']
+tickers = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'VT', 'BND', 'FZROX', 'FZILX', 'FXNAX', 'FBIIX']
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,9 +26,10 @@ logger = logging.getLogger(__name__)
 
 HISTORICAL_START_DATE = date(2020, 1, 1)
 
-#Source Start Dates
+#Source Start Dates - Determine how far back data exists for each ticker in source using the historical start date configured
 
 def get_source_start_dates(tickers, historical_start_date=HISTORICAL_START_DATE):
+
     source_start_dates = {}
 
     for ticker in tickers:
@@ -39,6 +40,7 @@ def get_source_start_dates(tickers, historical_start_date=HISTORICAL_START_DATE)
                 source_start_dates[ticker] = None
                 continue
 
+            #Convert yfinance's MultiIndex structure into a row-based format
             data = data.stack(level='Ticker', future_stack=True).reset_index()
             
             data = data.dropna(subset=['Date', 'Ticker', 'Close', 'Adj Close', 'High', 'Low', 'Open', 'Volume'])
@@ -51,11 +53,12 @@ def get_source_start_dates(tickers, historical_start_date=HISTORICAL_START_DATE)
 
     return source_start_dates
 
-#Metadata Check
+#Metadata Check - Determine whether each ticker needs a full historical load
+#or incremental load based on source and target historical coverage
 
 def get_market_data_start_dates(tickers, database_path=DATABASE_PATH, historical_start_date = HISTORICAL_START_DATE) -> dict:
-    try:
 
+    try:
         source_start_dates = get_source_start_dates(tickers, historical_start_date)
 
         with duckdb.connect(database_path) as con:
@@ -107,7 +110,8 @@ def get_market_data_start_dates(tickers, database_path=DATABASE_PATH, historical
 #Extract - Download market data from Yahoo Finance
 
 def extract_market_data(tickers, start_date: date, end_date: date) -> pd.DataFrame:
-    logger.info("Extracting market data for %d ETFs from %s to %s", len(tickers), start_date, end_date)
+
+    logger.info("Extracting market data for %d tickers from %s to %s", len(tickers), start_date, end_date)
 
     try:
         data = yf.download(tickers, start=start_date, end=end_date, auto_adjust=False)
@@ -122,9 +126,11 @@ def extract_market_data(tickers, start_date: date, end_date: date) -> pd.DataFra
 #Transform - Normalize and standardize market data
 
 def transform_market_data(data: pd.DataFrame) -> pd.DataFrame:
+
     logger.info("Transforming market data")
 
     try:
+        #Convert yfinance's MultiIndex structure into a row-based format
         df_long = data.stack(level='Ticker', future_stack=True).reset_index()
 
         df_long = df_long.rename(columns={
@@ -163,6 +169,7 @@ def transform_market_data(data: pd.DataFrame) -> pd.DataFrame:
 #Load - Write validated data to DuckDB
 
 def load_market_data(df: pd.DataFrame, database_path=DATABASE_PATH) -> None:
+
     logger.info("Loading market data into DuckDB")
     DATABASE_DIR.mkdir(exist_ok=True)
 
@@ -234,11 +241,14 @@ def load_market_data(df: pd.DataFrame, database_path=DATABASE_PATH) -> None:
 #Main Pipeline
 
 def main():
+
     logger.info("Starting market data pipeline")
 
-    start_dates = get_market_data_start_dates(etfs)
+    start_dates = get_market_data_start_dates(tickers)
     end_date = date.today()
 
+    #Group tickers by extraction start date so full history and incremental
+    #loads can be processed efficiently in separate batches
     extraction_groups = {}
 
     for ticker, start_date in start_dates.items():
@@ -248,24 +258,16 @@ def main():
     logger.info("Utilizing the following tickers grouped by start date: %s", extraction_groups)
 
     try:
-        for start_date, tickers in extraction_groups.items():
-            logger.info("Processing %d tickers from %s to %s: %s", len(tickers), start_date, end_date, tickers)
+        for start_date, group_tickers in extraction_groups.items():
+            logger.info("Processing %d tickers from %s to %s: %s", len(group_tickers), start_date, end_date, group_tickers)
 
-            #To do: extract data for this group
-
-            data = extract_market_data(tickers, start_date, end_date)
-
-            #To do: Transform extracted data
+            data = extract_market_data(group_tickers, start_date, end_date)
 
             df = transform_market_data(data)
-
-            #To do: Validate against the tickers in this group
             
             logger.info("Validating market data")
-            validate_market_data(df, set(tickers))
+            validate_market_data(df, set(group_tickers))
             logger.info("Market data validation passed")
-
-            #To do: Load the transformed data 
 
             load_market_data(df)
 
