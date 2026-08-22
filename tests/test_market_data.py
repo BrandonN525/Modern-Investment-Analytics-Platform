@@ -4,7 +4,9 @@ import duckdb
 from etl.market_data import (
     get_source_start_dates,
     get_market_data_start_dates,
-    extract_market_data
+    extract_market_data,
+    transform_market_data,
+    load_market_data
 )
 from unittest.mock import patch
 import pytest
@@ -180,3 +182,41 @@ def test_extract_market_data_raises_error():
         ):
             with pytest.raises(Exception, match='Yahoo Finance Failed'):
                 extract_market_data(['SPY', 'QQQ'], date(2026, 8, 1), date(2026, 8, 15))
+
+def test_transform_market_data():
+    
+    dates = pd.to_datetime(['2020-01-02', '2020-01-03'])
+    
+    dates.name = 'Date'
+    
+    columns = pd.MultiIndex.from_product(
+        [
+            ['Close', 'Adj Close', 'High', 'Low', 'Open', 'Volume'],
+            ['QQQ', 'SPY']
+        ],
+        names=['Price', 'Ticker']
+    )
+    
+    data = pd.DataFrame(
+        [
+            [100.02, 200.02, 100.2210021, 200.2210021, 105.902179, 205.902179, 99.8102780, 199.8102780, 100.414, 200.414, 1000, 2000],
+            [101.123456789, 201.123456789, 101.4719208, 201.4719208, 102.374819, 202.374819, 100.38390, 200.38390, 101.917, 201.917, 1100, 2100]
+        ],
+        index=dates,
+        columns=columns
+    )
+
+    result = transform_market_data(data)
+
+    expected = pd.DataFrame([
+        {'date': pd.to_datetime('2020-01-02'), 'ticker': 'QQQ', 'close': 100.02, 'adj_close': 100.221002, 'high': 105.902179, 'low': 99.810278, 'open': 100.414, 'volume': 1000},
+        {'date': pd.to_datetime('2020-01-02'), 'ticker': 'SPY', 'close': 200.02, 'adj_close': 200.221002, 'high': 205.902179, 'low': 199.810278, 'open': 200.414, 'volume': 2000},
+        {'date': pd.to_datetime('2020-01-03'), 'ticker': 'QQQ', 'close': 101.123457, 'adj_close': 101.471921, 'high': 102.374819, 'low': 100.38390, 'open': 101.917, 'volume': 1100},
+        {'date': pd.to_datetime('2020-01-03'), 'ticker': 'SPY', 'close': 201.123457, 'adj_close': 201.471921, 'high': 202.374819, 'low': 200.38390, 'open': 201.917, 'volume': 2100}
+    ])
+
+    expected.columns.name = 'Price'
+    expected['ticker'] = expected['ticker'].astype('string')
+    expected['volume'] = expected['volume'].astype('Int64')
+
+    pd.testing.assert_frame_equal(result, expected)
