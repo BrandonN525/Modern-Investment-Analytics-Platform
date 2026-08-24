@@ -2,4 +2,3 @@ pandas
 yfinance
 duckdb
 pytest
-logging

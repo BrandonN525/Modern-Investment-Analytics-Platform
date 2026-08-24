@@ -126,17 +126,21 @@ The market data pipeline extracts historical OHLC, adjusted close, and volume da
 
 ## Market Data
 
-The initial dataset contains a diversified set of ETFs representing major segments of the U.S. and global investment markets:
+The initial dataset contains a diversified set of ETFs and Index Funds representing major segments of the U.S. and global investment markets:
 
-| Ticker | Description                      |
-| ------ | -------------------------------- |
-| SPY    | S&P 500                          |
-| QQQ    | Nasdaq-100                       |
-| IWM    | Russell 2000                     |
-| VTI    | Total U.S. Stock Market          |
-| VXUS   | Total International Stock Market |
-| VT     | Global Stock Market              |
-| BND    | U.S. Total Bond Market           |
+| Ticker | Description                            |
+| ------ | -------------------------------------- |
+| SPY    | S&P 500                                |
+| QQQ    | Nasdaq-100                             |
+| IWM    | Russell 2000                           |
+| VTI    | Total U.S. Stock Market                |
+| VXUS   | Total International Stock Market       |
+| VT     | Global Stock Market                    |
+| BND    | U.S. Total Bond Market                 |
+| FZROX  | Fidelity Total Market Index Fund       |
+| FZILX  | Fidelity International Index Fund      |
+| FXNAX  | Fidelity U.S. Bond Index Fund          |
+| FBIIX  | Fidelity International Bond Index Fund |
 
 The initial historical load begins in January 2020. Subsequent pipeline executions use the latest date stored in DuckDB to determine the incremental extraction window and retrieve newly available market data through the current date.
 

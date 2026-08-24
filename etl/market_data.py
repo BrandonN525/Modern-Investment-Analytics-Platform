@@ -6,14 +6,14 @@ from etl.validation import validate_market_data
 import logging
 from datetime import date
 
-#Project Paths
+# Project Paths
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / 'data'
 DATABASE_DIR = PROJECT_ROOT / "database"
 DATABASE_PATH = DATABASE_DIR / "investment_analytics.duckdb"
 
-#Configuration
+# Configuration
 
 tickers = ['SPY', 'QQQ', 'IWM', 'VTI', 'VXUS', 'VT', 'BND', 'FZROX', 'FZILX', 'FXNAX', 'FBIIX']
 
@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 HISTORICAL_START_DATE = date(2020, 1, 1)
 
-#Source Start Dates - Determine how far back data exists for each ticker in source using the historical start date configured
+# Source Start Dates - Determine how far back data exists for each ticker in source
+# using the historical start date configured
 
 def get_source_start_dates(tickers, historical_start_date=HISTORICAL_START_DATE):
 
@@ -40,7 +41,7 @@ def get_source_start_dates(tickers, historical_start_date=HISTORICAL_START_DATE)
                 source_start_dates[ticker] = None
                 continue
 
-            #Convert yfinance's MultiIndex structure into a row-based format
+            # Convert yfinance's MultiIndex structure into a row-based format
             data = data.stack(level='Ticker', future_stack=True).reset_index()
             
             data = data.dropna(subset=['Date', 'Ticker', 'Close', 'Adj Close', 'High', 'Low', 'Open', 'Volume'])
@@ -53,8 +54,8 @@ def get_source_start_dates(tickers, historical_start_date=HISTORICAL_START_DATE)
 
     return source_start_dates
 
-#Metadata Check - Determine whether each ticker needs a full historical load
-#or incremental load based on source and target historical coverage
+# Metadata Check - Determine whether each ticker needs a full historical load
+# or incremental load based on source and target historical coverage
 
 def get_market_data_start_dates(tickers, database_path=DATABASE_PATH, historical_start_date = HISTORICAL_START_DATE) -> dict:
 
@@ -107,7 +108,7 @@ def get_market_data_start_dates(tickers, database_path=DATABASE_PATH, historical
         logger.exception("Metadata check failed")
         raise
 
-#Extract - Download market data from Yahoo Finance
+# Extract - Download market data from Yahoo Finance
 
 def extract_market_data(tickers, start_date: date, end_date: date) -> pd.DataFrame:
 
@@ -123,14 +124,14 @@ def extract_market_data(tickers, start_date: date, end_date: date) -> pd.DataFra
 
     return data
 
-#Transform - Normalize and standardize market data
+# Transform - Normalize and standardize market data
 
 def transform_market_data(data: pd.DataFrame) -> pd.DataFrame:
 
     logger.info("Transforming market data")
 
     try:
-        #Convert yfinance's MultiIndex structure into a row-based format
+        # Convert yfinance's MultiIndex structure into a row-based format
         df_long = data.stack(level='Ticker', future_stack=True).reset_index()
 
         df_long = df_long.rename(columns={
@@ -166,7 +167,7 @@ def transform_market_data(data: pd.DataFrame) -> pd.DataFrame:
 
     return df_long
 
-#Load - Write validated data to DuckDB
+# Load - Write validated data to DuckDB
 
 def load_market_data(df: pd.DataFrame, database_path=DATABASE_PATH) -> None:
 
@@ -238,7 +239,7 @@ def load_market_data(df: pd.DataFrame, database_path=DATABASE_PATH) -> None:
         logger.exception("Market data loading failed")
         raise
 
-#Main Pipeline
+# Main Pipeline
 
 def main():
 
@@ -247,8 +248,8 @@ def main():
     start_dates = get_market_data_start_dates(tickers)
     end_date = date.today()
 
-    #Group tickers by extraction start date so full history and incremental
-    #loads can be processed efficiently in separate batches
+    # Group tickers by extraction start date so full history and incremental
+    # loads can be processed efficiently in separate batches
     extraction_groups = {}
 
     for ticker, start_date in start_dates.items():
