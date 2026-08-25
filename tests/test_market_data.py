@@ -7,9 +7,10 @@ from etl.market_data import (
     extract_market_data,
     transform_market_data,
     load_market_data,
-    HISTORICAL_START_DATE
+    HISTORICAL_START_DATE,
+    main
 )
-from unittest.mock import patch
+from unittest.mock import patch, call
 import pytest
 
 def test_get_source_start_dates():
@@ -194,6 +195,73 @@ def test_get_market_data_start_dates_handles_multiple_tickers(tmp_path):
             'FZROX': HISTORICAL_START_DATE
         }
 
+def test_get_market_data_start_dates_uses_db_max_when_no_source_data(tmp_path):
+
+    db_path = tmp_path / "duck.db"
+
+    tickers = ['SPY']
+
+    source_start_dates = {
+        'SPY': None
+    }
+
+    with duckdb.connect(db_path) as con:
+    
+        con.execute("""
+            CREATE TABLE raw_market_prices (
+                date TIMESTAMP_NS,
+                ticker VARCHAR,
+                open DOUBLE,
+                high DOUBLE,
+                low DOUBLE,
+                close DOUBLE,
+                adj_close DOUBLE,
+                volume BIGINT
+            )
+        """)
+    
+        con.execute("""
+            INSERT INTO raw_market_prices VALUES
+                ('2020-01-02', 'SPY', 1, 1, 1, 1, 1, 1),
+                ('2026-08-18', 'SPY', 1, 1, 1, 1, 1, 1)
+        """)    
+    
+    with patch(
+        'etl.market_data.get_source_start_dates',
+        return_value = source_start_dates
+    ):
+    
+        result = get_market_data_start_dates(tickers, db_path, HISTORICAL_START_DATE)
+    
+        assert result == {
+            'SPY': date(2026, 8, 18)
+        }
+
+def test_get_market_data_start_dates_handles_missing_table(tmp_path):
+
+    db_path = tmp_path / "duck.db"
+
+    tickers = ['SPY', 'QQQ', 'FZROX']
+
+    source_start_dates = {
+        'SPY': pd.Timestamp('2020-01-02'),
+        'QQQ': pd.Timestamp('2020-01-02'),
+        'FZROX': pd.Timestamp('2021-01-04')
+    }
+    
+    with patch(
+        'etl.market_data.get_source_start_dates',
+        return_value = source_start_dates
+    ):
+    
+        result = get_market_data_start_dates(tickers, db_path, HISTORICAL_START_DATE)
+    
+        assert result == {
+            'SPY': HISTORICAL_START_DATE,
+            'QQQ': HISTORICAL_START_DATE,
+            'FZROX': HISTORICAL_START_DATE
+        }
+
 def test_extract_market_data():
 
     mock_data = pd.DataFrame({
@@ -368,3 +436,294 @@ def test_load_market_data(tmp_path):
             (datetime(2026, 8, 18), 'QQQ', 203.0),
             (datetime(2026, 8, 18), 'SPY', 103.0)
         ]
+
+def test_load_market_data_handles_duplicate_rows(tmp_path):
+
+    db_path = tmp_path / "duck.db"
+
+    df = pd.DataFrame([
+        {
+            'date': pd.to_datetime('2026-08-18'),
+            'ticker': 'SPY',
+            'open': 100.0,
+            'high': 105.0,
+            'low': 99.0,
+            'close': 103.0,
+            'adj_close': 103.0,
+            'volume': 100000
+        },
+        {
+            'date': pd.to_datetime('2026-08-19'),
+            'ticker': 'SPY',
+            'open': 200.0,
+            'high': 205.0,
+            'low': 199.0,
+            'close': 203.0,
+            'adj_close': 203.0,
+            'volume': 200000
+        }
+    ])
+
+    with duckdb.connect(db_path) as con:
+    
+        con.execute("""
+            CREATE TABLE raw_market_prices (
+                date TIMESTAMP_NS,
+                ticker VARCHAR,
+                open DOUBLE,
+                high DOUBLE,
+                low DOUBLE,
+                close DOUBLE,
+                adj_close DOUBLE,
+                volume BIGINT
+            )
+        """)
+    
+        con.execute("""
+            INSERT INTO raw_market_prices VALUES
+                ('2020-01-02', 'SPY', 1, 1, 1, 1, 1, 1),
+                ('2026-08-18', 'SPY', 100.0, 105.0, 99.0, 103.0, 103.0, 100000)
+        """)
+
+    load_market_data(df, db_path)
+    
+    with duckdb.connect(db_path) as con:
+
+        spy_dates = con.sql("""
+                        SELECT date
+                        FROM raw_market_prices
+                        WHERE ticker = 'SPY'
+                        ORDER BY date
+                    """).fetchall()
+
+        assert spy_dates == [
+            (datetime(2020, 1, 2),),
+            (datetime(2026, 8, 18),),
+            (datetime(2026, 8, 19),)
+        ]
+
+def test_load_market_data_handles_new_ticker(tmp_path):
+    db_path = tmp_path / "duck.db"
+    
+    df = pd.DataFrame([
+        {
+            'date': pd.to_datetime('2026-08-18'),
+            'ticker': 'QQQ',
+            'open': 200.0,
+            'high': 205.0,
+            'low': 199.0,
+            'close': 203.0,
+            'adj_close': 203.0,
+            'volume': 200000
+        },
+        {
+            'date': pd.to_datetime('2026-08-19'),
+            'ticker': 'QQQ',
+            'open': 300.0,
+            'high': 305.0,
+            'low': 299.0,
+            'close': 303.0,
+            'adj_close': 303.0,
+            'volume': 300000
+        }
+    ])
+
+    with duckdb.connect(db_path) as con:
+    
+        con.execute("""
+            CREATE TABLE raw_market_prices (
+                date TIMESTAMP_NS,
+                ticker VARCHAR,
+                open DOUBLE,
+                high DOUBLE,
+                low DOUBLE,
+                close DOUBLE,
+                adj_close DOUBLE,
+                volume BIGINT
+            )
+        """)
+    
+        con.execute("""
+            INSERT INTO raw_market_prices VALUES
+                ('2020-01-02', 'SPY', 1, 1, 1, 1, 1, 1),
+                ('2026-08-18', 'SPY', 100.0, 105.0, 99.0, 103.0, 103.0, 100000)
+        """)
+
+    load_market_data(df, db_path)
+    
+    with duckdb.connect(db_path) as con:
+
+        qqq_rows = con.sql("""
+                        SELECT date, ticker, close
+                        FROM raw_market_prices
+                        WHERE ticker = 'QQQ'
+                        ORDER BY date
+                    """).fetchall()
+
+        assert qqq_rows == [
+            (datetime(2026, 8, 18), 'QQQ', 203.0),
+            (datetime(2026, 8, 19), 'QQQ', 303.0)
+        ]
+
+def test_load_market_data_preserves_existing_rows(tmp_path):
+    db_path = tmp_path / "duck.db"
+    
+    df = pd.DataFrame([
+        {
+            'date': pd.to_datetime('2026-08-18'),
+            'ticker': 'SPY',
+            'open': 200.0,
+            'high': 205.0,
+            'low': 199.0,
+            'close': 203.0,
+            'adj_close': 203.0,
+            'volume': 200000
+        }
+    ])
+
+    with duckdb.connect(db_path) as con:
+    
+        con.execute("""
+            CREATE TABLE raw_market_prices (
+                date TIMESTAMP_NS,
+                ticker VARCHAR,
+                open DOUBLE,
+                high DOUBLE,
+                low DOUBLE,
+                close DOUBLE,
+                adj_close DOUBLE,
+                volume BIGINT
+            )
+        """)
+    
+        con.execute("""
+            INSERT INTO raw_market_prices VALUES
+                ('2026-08-18', 'SPY', 100.0, 105.0, 99.0, 103.0, 103.0, 100000)
+        """)
+
+    load_market_data(df, db_path)
+    
+    with duckdb.connect(db_path) as con:
+
+        spy_row = con.sql("""
+                        SELECT date, ticker, open, high, low, close, adj_close, volume
+                        FROM raw_market_prices
+                        WHERE ticker = 'SPY'
+                    """).fetchall()
+
+        assert spy_row == [
+            (datetime(2026, 8, 18), 'SPY', 100.0, 105.0, 99.0, 103.0, 103.0, 100000)
+        ]
+
+def test_main_groups_tickers_by_start_date():
+
+    with patch(
+        'etl.market_data.get_market_data_start_dates',
+        return_value = {
+            'SPY': date(2026, 8, 18),
+            'QQQ': date(2020, 1, 1),
+            'FZROX': date(2026, 8, 18)
+        }
+    ), patch(
+        'etl.market_data.extract_market_data',
+        return_value = pd.DataFrame()
+    ) as mock_extract, patch(
+        'etl.market_data.transform_market_data',
+        return_value = pd.DataFrame()
+    ), patch(
+        'etl.market_data.validate_market_data'
+    ), patch(
+        'etl.market_data.load_market_data'
+    ):
+        main()
+
+        assert mock_extract.call_count == 2
+
+        assert call(
+            ['SPY', 'FZROX'],
+            date(2026, 8, 18),
+            date.today()
+        ) in mock_extract.call_args_list
+
+        assert call(
+            ['QQQ'],
+            date(2020, 1, 1),
+            date.today()
+        ) in mock_extract.call_args_list
+
+def test_main_runs_validation_and_load_for_each_group():
+
+    transformed_df = pd.DataFrame([
+        {
+            'date': pd.to_datetime('2026-08-18'),
+            'ticker': 'SPY',
+            'open': 100.0,
+            'high': 105.0,
+            'low': 99.0,
+            'close': 103.0,
+            'adj_close': 103.0,
+            'volume': 100000
+        },
+        {
+            'date': pd.to_datetime('2026-08-18'),
+            'ticker': 'QQQ',
+            'open': 200.0,
+            'high': 205.0,
+            'low': 199.0,
+            'close': 203.0,
+            'adj_close': 203.0,
+            'volume': 200000
+        }
+    ])
+
+    with patch(
+        'etl.market_data.get_market_data_start_dates',
+        return_value = {
+            'SPY': date(2026, 8, 18),
+            'QQQ': date(2020, 1, 1)
+        }
+    ), patch(
+        'etl.market_data.extract_market_data',
+        return_value = pd.DataFrame()
+    ) as mock_extract, patch(
+        'etl.market_data.transform_market_data',
+        return_value = transformed_df
+    ) as mock_transform, patch(
+        'etl.market_data.validate_market_data'
+    ) as mock_validate, patch(
+        'etl.market_data.load_market_data'
+    ) as mock_load:
+
+        main()
+
+        assert mock_extract.call_count == 2
+
+        assert call(
+            ['SPY'],
+            date(2026, 8, 18),
+            date.today()
+        ) in mock_extract.call_args_list
+
+        assert call(
+            ['QQQ'],
+            date(2020, 1, 1),
+            date.today()
+        ) in mock_extract.call_args_list
+
+        assert mock_transform.call_count == 2
+
+        assert mock_validate.call_count == 2
+
+        assert mock_load.call_count == 2
+
+        assert mock_validate.call_args_list[0].args[0] is transformed_df
+
+        assert mock_validate.call_args_list[1].args[0] is transformed_df
+
+        assert set(mock_validate.call_args_list[0].args[1]) == {'SPY'}
+
+        assert set(mock_validate.call_args_list[1].args[1]) == {'QQQ'}
+
+        assert mock_load.call_args_list[0].args[0] is transformed_df
+        
+        assert mock_load.call_args_list[1].args[0] is transformed_df

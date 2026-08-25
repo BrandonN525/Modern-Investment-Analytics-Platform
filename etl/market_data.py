@@ -177,16 +177,47 @@ def load_market_data(df: pd.DataFrame, database_path=DATABASE_PATH) -> None:
     try:
         with duckdb.connect(database_path) as con:
             table_exists = con.sql("""
-                           SELECT 1
-                           FROM information_schema.tables
-                           WHERE table_schema = 'main'
-                           AND table_name = 'raw_market_prices'""").fetchone()
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'main'
+                AND table_name = 'raw_market_prices'
+            """).fetchone()
             
             if table_exists is None:
+
                 con.execute("""
-                    CREATE TABLE raw_market_prices AS
-                    SELECT *
-                    FROM df
+                    CREATE TABLE raw_market_prices (
+                        date TIMESTAMP NOT NULL,
+                        ticker VARCHAR NOT NULL,
+                        open DOUBLE NOT NULL,
+                        high DOUBLE NOT NULL,
+                        low DOUBLE NOT NULL,
+                        close DOUBLE NOT NULL,
+                        adj_close DOUBLE NOT NULL,
+                        volume BIGINT NOT NULL,
+                        PRIMARY KEY (date, ticker)
+                    );
+
+                    INSERT INTO raw_market_prices (
+                        date,
+                        ticker,
+                        open,
+                        high,
+                        low,
+                        close,
+                        adj_close,
+                        volume
+                    )
+                    SELECT
+                        date,
+                        ticker,
+                        open,
+                        high,
+                        low,
+                        close,
+                        adj_close,
+                        volume
+                    FROM df;
                 """)
                 
                 row_count = con.sql("""
@@ -220,8 +251,25 @@ def load_market_data(df: pd.DataFrame, database_path=DATABASE_PATH) -> None:
                 logger.info("%d new rows identified for insertion", new_row_count)
 
                 con.execute("""
-                    INSERT INTO raw_market_prices
-                    SELECT *
+                    INSERT INTO raw_market_prices (
+                        date,
+                        ticker,
+                        open,
+                        high,
+                        low,
+                        close,
+                        adj_close,
+                        volume
+                    )
+                    SELECT
+                        date,
+                        ticker,
+                        open,
+                        high,
+                        low,
+                        close,
+                        adj_close,
+                        volume
                     FROM df
                     WHERE NOT EXISTS(
                         SELECT 1
