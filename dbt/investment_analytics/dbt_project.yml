@@ -1,0 +1,13 @@
+name: investment_analytics
+version: '1.0.0'
+config-version: 2
+
+profile: investment_analytics
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+models:
+  investment_analytics:
+    +materialized: view

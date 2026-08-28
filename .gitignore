@@ -27,3 +27,11 @@ data/*
 # OS-generated files
 .DS_Store
 Thumbs.db
+
+# dbt
+dbt/investment_analytics/logs/
+dbt/investment_analytics/target/
+dbt/investment_analytics/dbt_packages/
+
+# Logs
+/logs
