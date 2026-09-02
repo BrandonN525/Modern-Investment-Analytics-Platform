@@ -1,0 +1,10 @@
+version: 2
+
+models:
+ - name: stg_market_prices
+   description: "Stage raw market prices for further transformation within dbt."
+   columns:
+    - name: date
+      description: "The date that the volume and OHLC prices were observed."
+      data_tests:
+       - not_null
