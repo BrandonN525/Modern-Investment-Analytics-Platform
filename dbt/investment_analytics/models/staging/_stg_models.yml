@@ -3,8 +3,65 @@ version: 2
 models:
  - name: stg_market_prices
    description: "Stage raw market prices for further transformation within dbt."
+
+   data_tests:
+    - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns:
+            - date
+            - ticker
+
    columns:
     - name: date
-      description: "The date that the volume and OHLC prices were observed."
+      description: "The trading date on which the market price and volume data was observed."
       data_tests:
-       - not_null
+        - not_null
+
+    - name: ticker
+      description: "The ticker symbol identifying the security."
+      data_tests:
+        - not_null
+        - accepted_values:
+            arguments:
+              values:
+                - SPY
+                - QQQ
+                - IWM
+                - VTI
+                - VXUS
+                - VT
+                - BND
+                - FZROX
+                - FZILX
+                - FXNAX
+                - FBIIX
+
+    - name: open
+      description: "The opening market price for the security on the trading date."
+      data_tests:
+        - not_null
+
+    - name: high
+      description: "The highest market price for the security on the trading date."
+      data_tests:
+        - not_null
+
+    - name: low
+      description: "The lowest market price for the security on the trading date."
+      data_tests:
+        - not_null
+
+    - name: close
+      description: "The closing market price for the security on the trading date."
+      data_tests:
+        - not_null
+
+    - name: adj_close
+      description: "The closing market price adjusted for applicable corporate actions."
+      data_tests:
+        - not_null
+
+    - name: volume
+      description: "The total number of shares traded for the security on the trading date."
+      data_tests:
+        - not_null
