@@ -35,3 +35,6 @@ dbt/investment_analytics/dbt_packages/
 
 # Logs
 /logs
+
+#Notes
+/notes
