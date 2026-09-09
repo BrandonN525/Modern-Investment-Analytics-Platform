@@ -1,0 +1,74 @@
+version: 2
+
+models:
+  - name: fct_market_performance
+    description: "Calculate market performance analytical values."
+
+    data_tests:
+     - dbt_utils.unique_combination_of_columns:
+        arguments:
+          combination_of_columns:
+            - date
+            - ticker
+    
+    columns:
+    - name: date
+      description: "The trading date on which the market price and volume data was observed."
+      data_tests:
+        - not_null
+
+    - name: ticker
+      description: "The ticker symbol identifying the security."
+      data_tests:
+        - not_null
+        - accepted_values:
+            arguments:
+              values:
+                - SPY
+                - QQQ
+                - IWM
+                - VTI
+                - VXUS
+                - VT
+                - BND
+                - FZROX
+                - FZILX
+                - FXNAX
+                - FBIIX
+
+    - name: adj_close
+      description: "The closing market price adjusted for applicable corporate actions."
+      data_tests:
+        - not_null
+
+    - name: daily_price_change
+      description: "The change in adjusted closing price from the previous trading day. NULL for the first observation of each ticker."
+
+    - name: daily_return
+      description: "The simple daily return calculated from the current and previous adjusted closing prices. NULL for the first observation of each ticker."
+
+    - name: log_return
+      description: "The natural logirithm of the ratio of the current adjusted closing price to the previous adjusted closing price. NULL for the first observation of each ticker."
+
+    - name: cumulative_return
+      description: "The cumulative return calculated from the current and first adjusted closing prices."
+      data_tests:
+        - not_null
+
+    - name: rolling_21d_return
+      description: "The trailing 21 day return calculated from the current adjusted closing price and the adjusted close 21 trading days earlier, representing approximately one trading months return. NULL when fewer than 21 prior observations are available."
+
+    - name: rolling_63d_return
+      description: "The trailing 63 day return calculated from the current adjusted closing price and the adjusted close 63 trading days earlier, representing approximately one trading quarters return. NULL when fewer than 63 prior observations are available."
+
+    - name: rolling_252d_return
+      description: "The trailing 252 day return calculated from the current adjusted closing price and the adjusted close 252 trading days earlier, representing approximately one trading years return. NULL when fewer than 252 prior observations are available."
+
+    - name: rolling_21d_volatility
+      description: "The annualized volatility calculated as the sample standard deviation of daily log returns over the trailing 21 trading observations, multiplied by the square root of 252. NULL when fewer than 21 valid daily log returns are available."
+
+    - name: rolling_63d_volatility
+      description: "The annualized volatility calculated as the sample standard deviation of daily log returns over the trailing 63 trading observations, multiplied by the square root of 252. NULL when fewer than 63 valid daily log returns are available."
+
+    - name: rolling_252d_volatility
+      description: "The annualized volatility calculated as the sample standard deviation of daily log returns over the trailing 252 trading observations, multiplied by the square root of 252. NULL when fewer than 252 valid daily log returns are available."

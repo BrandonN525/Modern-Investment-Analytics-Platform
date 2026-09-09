@@ -65,3 +65,15 @@ models:
       description: "The total number of shares traded for the security on the trading date."
       data_tests:
         - not_null
+
+    - name: prev_adj_close
+      description: "The previous trading day's adjusted closing price for the security. NULL for the first observation of each ticker."
+
+    - name: daily_price_change
+      description: "The change in adjusted closing price from the previous trading day. NULL for the first observation of each ticker."
+
+    - name: daily_return
+      description: "The simple daily return calculated from the current and previous adjusted closing prices. NULL for the first observation of each ticker."
+
+    - name: log_return
+      description: "The natural logirithm of the ratio of the current adjusted closing price to the previous adjusted closing price. NULL for the first observation of each ticker."
