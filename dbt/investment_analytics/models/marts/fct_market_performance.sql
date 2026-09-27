@@ -24,7 +24,13 @@ SELECT
     (adj_close / adj_close_21_days_ago) - 1 as rolling_21d_return,
     (adj_close / adj_close_63_days_ago) - 1 as rolling_63d_return,
     (adj_close / adj_close_252_days_ago) - 1 as rolling_252d_return,
-    STDDEV_SAMP(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 20 PRECEDING AND CURRENT ROW) * SQRT(252) as rolling_21d_volatility,
-    STDDEV_SAMP(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 62 PRECEDING AND CURRENT ROW) * SQRT(252) as rolling_63d_volatility,
-    STDDEV_SAMP(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW) * SQRT(252) as rolling_252d_volatility
+    CASE WHEN COUNT(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 20 PRECEDING AND CURRENT ROW) >= 21
+    THEN STDDEV_SAMP(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 20 PRECEDING AND CURRENT ROW) * SQRT(252)
+    END as rolling_21d_volatility,
+    CASE WHEN COUNT(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 62 PRECEDING AND CURRENT ROW) >= 63
+    THEN STDDEV_SAMP(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 62 PRECEDING AND CURRENT ROW) * SQRT(252)
+    END as rolling_63d_volatility,
+    CASE WHEN COUNT(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW) >= 252
+    THEN STDDEV_SAMP(log_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 251 PRECEDING AND CURRENT ROW) * SQRT(252)
+    END as rolling_252d_volatility
 FROM rolling_return
